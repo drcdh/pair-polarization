@@ -1,25 +1,34 @@
+import csv
 from functools import partial
 from sys import argv
 
 import matplotlib.pyplot as plt
-import vegas
-from numpy import pi as Pi, sin, cos, sqrt, power
-from pycuba import Vegas
+#import vegas
+from numpy import (pi as Pi, sin, cos, sqrt,
+ #power as pow,
+  linspace)
+from cycuba import Vegas, Suave, Divonne, Cuhre
 from scipy import integrate
 
 MASS_MEV = 0.511  # mass, electron/positron
 
 
 # int Integral(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata)
-def _sig(X, omega, phi, psi):
-    en = X[0]*omega  # energy, electron
-    t  = X[1]*Pi/2.  # theta, electron
-    tp = X[2]*Pi/2.  # theta, positron
-#def _sig(en, t, tp, omega, phi, psi):
+#def _sig(X, omega, phi, psi):
+#    en = X[0]*omega  # energy, electron
+#    t  = X[1]*Pi/2.  # theta, electron
+#    tp = X[2]*Pi/2.  # theta, positron
+def _sig(en, t, tp, omega, phi, psi):
+    # Scale energy from 0,1 to 0,omega
+    en *= omega
+    # Scale thetas from 0,1 to 0,Pi
+    t *= Pi/2
+    tp *= Pi/2
+
     enp = omega - en  # energy, positron
 
-    b  = sqrt(1. - power(MASS_MEV/en,  2)) if en > MASS_MEV else 0
-    bp = sqrt(1. - power(MASS_MEV/enp, 2)) if en > MASS_MEV else 0
+    b  = 0. if en  < MASS_MEV else sqrt(1. - pow(MASS_MEV/en,  2))
+    bp = 0. if enp < MASS_MEV else sqrt(1. - pow(MASS_MEV/enp, 2))
 
     qa = en*enp*(1. - b*bp*(sin(t)*sin(tp)*cos(phi)
                    + cos(t)*cos(tp)))
@@ -41,9 +50,9 @@ def _sig(X, omega, phi, psi):
           )
 
     s2 = (
-            a * ap / omega / pow(q2, 2) * pow(en * b * sin(t), 2)
-        + pow(enp * bp * sin(tp), 2)
-        + 2 * en * enp * b * bp * cos(phi) * sin(t) * sin(tp)
+            a * ap / omega / pow(q2, 2) * (pow(en * b * sin(t), 2)
+                                         + pow(enp * bp * sin(tp), 2)
+                + 2 * en * enp * b * bp * cos(phi) * sin(t) * sin(tp))
     )
 
     f = 0.  # f and Z are unused
@@ -80,6 +89,40 @@ def vegas_sigma(omega, phi, psi, verbose: bool = False,
         return result.mean, result.sdev
     return result.mean
 
+METHODS = {
+    'c': Cuhre,
+    'd': Divonne,
+    's': Suave,
+    'v': Vegas,
+}
+PARAM = dict(
+    ranges=None,  # None for unit hypercube
+#    nstart=1000,
+#    nincrease=500,
+#    nbatch=1000,
+#    gridno=0,
+    verbosity=0,
+#    last_samples_only=False,
+#    do_not_smooth=False,
+    retain_state_file=False,
+#    file_grid_only=False,
+#    level=0,
+    epsrel=1e-3,
+    epsabs=1e-12,
+#    seed=1959,
+    mineval=0,
+    maxeval=1e6,
+)
+def cycuba_sigma(omega, phi, psi, method: str ='v', verbose=False):
+    method = METHODS[method.lower()[0]]
+    def cuba_integrand(en, t, tp):
+        return [_sig(en, t, tp, omega=omega, phi=phi, psi=psi)]
+    cycuba_result = method(cuba_integrand, **PARAM)
+    if verbose:
+        print('>> sigma = %.6g\n'
+              '        +- %.6g\n'
+              '   prob = %.2f' % (cycuba_result[0][0], cycuba_result[1][0], cycuba_result[2][0]))
+    return cycuba_result
 
 def PyCube_print_results(name, results):
     keys = ['nregions', 'neval', 'fail']
@@ -101,40 +144,54 @@ def PyCuba_sigma(omega, phi, psi):
     PyCube_print_results("Vegas", Vegas(PyCubaIntegrand, 3, verbose=2))
 
 
-def main():
-    omega_v = [60., 70., 80., 90., 100.,
-                                   200., 300., 400., 600., 700., 800., 900., 1000.]
+OMEGA_V = [
+#    5., 10.,
+    20.,  50.,
+    #60., 70., 80., 90.,
+    100.,
+    200.,# 300., 400., 500.,
+    #600., 700., 800., 900., 1000.
+]
 
-    phi_break = 2.9  # Change the phi sampling rate at this value
-    n1, n = 10, 20  # n is "paso"
+def main(csvfile, method, verbose=False):
+    writer = csv.writer(csvfile)
+    writer.writerow('omega Phi Psi sigma error'.split(' '))
+
+    #phi_break = 2.9  # Change the phi sampling rate at this value
+    #n1, n = 10, 20  # n is "paso"
+    phi_break, n1, n = Pi*3/4., 0, 50
     phi_v = [phi_break * i / n1 for i in range(n1)]
     phi_v += [(Pi - phi_break) * i / (n - n1) + phi_break for i in range(n - n1)]
-    phi_v = phi_v[::-1]
+    phi_v += [Pi]
 
-    psi_v = [j*Pi/n for j in range(n)]
+    #psi_v = [j*Pi/n for j in range(n)]
+    #psi_v += [Pi]
+    psi_v = [0., Pi/2.]
 
-    res = []
-    for omega in [100.]:  #omega_v:
-        _res = []
+    for omega in OMEGA_V:
         for phi in phi_v:
-            __res = []
             for psi in psi_v:
-                fq = integrate.nquad(_sig,
-                                     [[0., 1],  # en
-                                      [0., Pi],  # t
-                                      [0., Pi]],  # tp
-                                     args=(omega, phi, psi),
-                                     )
-                print("%.1f  %.2f  %.2f  %.6e +- %.6e" % (omega, phi, psi, fq[0], fq[1]))
-                __res.append(fq)
-            _res.append(__res)
-        res.append(_res)
-    # res is now a 3D grid indexed like [omega][phi][psi]
-    res = res[0]
-    plt.plot(res, phi_v, psi_v)
+                cyc = cycuba_sigma(omega, phi=phi, psi=psi, method=method, verbose=False)
+                if verbose:
+                    print("%.1f  %.2f  %.2f  %.6e +- %.6e" % (omega, phi, psi, cyc[0][0], cyc[1][0]))
+                writer.writerow(['%.6g'%v for v in [omega, phi, psi, cyc[0][0], cyc[1][0]]])
 
+def demo_methods():
+    for m in 'vsdc':
+        print('\n@@ METHOD = %s' % METHODS[m].__name__)
+        for psi_, phi_ in ((0., 3.), (Pi/2, 3.), (Pi/2, 3.12), (0., 3.12)):
+            print(f'\n== psi = {psi_}\n== phi = {phi_}')
+            cycuba_sigma(100., phi=phi_, psi=psi_, method=m, verbose=True)
 
 if __name__ == '__main__':
     #vegas_sigma(100, 3.12, 0., verbose=True)
-    PyCuba_sigma(100., 3.12, 0.)
-    #main()
+#    for psi_ in linspace(0.01, 3.12, 10, endpoint=True):
+#        print('\n###  PSI = %4.2f  ###\n' % psi_)
+#        cycuba_vegas_sigma(100, psi_, 0.)
+#    for phi_ in linspace(0.01, 3.14, 10, endpoint=True):
+#        print('\n###  PHI = %4.2f  ###\n' % phi_)
+#        cycuba_vegas_sigma(100, 3.12, phi_)
+    #PyCuba_sigma(100., 3.12, 0.)
+    with open(argv[1], 'w', newline='') as csvfile:
+        main(csvfile, method=argv[2], verbose=True)
+#    demo_methods()
