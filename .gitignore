@@ -127,3 +127,11 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Et cetera
+*.csv
+*.csv.*
+*.npz
+ipython_log*
+*.zip
+*.png
