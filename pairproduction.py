@@ -8,7 +8,7 @@
 # Electron/positron energies are in units of k (in units of m).
 # Φ is in units of α*Z**2*e**4.
 
-def q2(k, E, θ, θp, φa) -> float:
+def q2(k, E, θ, θp, φ) -> float:
     q2 = (
         -2*(
             E*(1 - E)*(1 - sin(θ)*sin(θp)*cos(φ) - cos(θ)*cos(θp))
