@@ -115,7 +115,7 @@ def _main(omega=None, nphi=60, phi_min=0, phi_break=3, verbose=False):
                 yield ω, φ, ψ, σ, ε
 
 def main(omega=None, nphi=60, phi_min=0, phi_break=3, verbose=False):
-    with open("ppv.csv", 'w', newline='') as csvfile:
+    with open("ppv.csv", 'w', newline='', encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow('ω φ ψ σ ε'.split(' '))
         for ω, φ, ψ, σ, ε in _main(omega, nphi, phi_min, phi_break, verbose):
