@@ -16,7 +16,7 @@ from sys import argv
 
 from numpy import (pi, sin, cos, sqrt)
 
-from cycuba import Cuhre
+import vegas
 
 
 MASS_MEV = 0.511  # mass, electron/positron
@@ -71,20 +71,33 @@ def _dΦ(E, θ, θp, k, φ, ψ) -> float:
     return _dΦ
 
 def _Φ(k, φ, ψ,
-        epsabs: float = 1e-6,
-        epsrel: float = 1e-3,
-        maxeval: int  = 1e5,
+        adapt_nitn: int = 10, adapt_neval: int = 10000,
+        nitn: int = 10, neval: int = 2000,
+        alpha: float = .5,
         verbose: bool = False,
 ) -> (float, float):
-    #integrand = partial(_dΦ, k=k, φ=φ, ψ=ψ)
-    def integrand(E, θ, θp):
+    def integrand(X):
+        E, θ, θp = X
         return [_dΦ(E, θ, θp, k=k, φ=φ, ψ=ψ)]
-    result = Cuhre(integrand, ranges=[[1, k-1], [0, pi], [0, pi]], maxeval=maxeval, epsabs=epsabs, epsrel=epsrel, retain_state_file=False)
-    mu, sig, p = result[0][0], result[1][0], result[2][0]
+    integ = vegas.Integrator([[1, k-1], [0, pi], [0, pi]])
+    # step 1 -- adapt to sigma; discard results
+    adapt = integ(integrand, nitn=adapt_nitn, neval=adapt_neval, alpha=alpha)
+    if verbose:
+        print('ADAPTATION:')
+        print(adapt.summary())
+    # step 2 -- integ has adapted to f; keep results
+    result = integ(integrand, nitn=nitn, neval=neval, alpha=alpha)
+    if verbose:
+        print('ESTIMATION:')
+        print(result.summary())
+        print('    Result = %s    Q = %.2f' % (result, result.Q))
+        print('    Result = %f +- %f' % (result[0].mean, result[0].sdev))
+
+    mu, sig, Q = result[0].mean, result[0].sdev, result.Q
     if verbose:
         print('>> sigma = %.6g\n'
               '        +- %.6g\n'
-              '   prob = %.2g' % (mu, sig, p))
+              '   Q = %.2g' % (mu, sig, Q))
     return mu, sig
 
 def _main(omega=None, nphi=60, phi_min=0, phi_break=3, verbose=False):
@@ -95,14 +108,14 @@ def _main(omega=None, nphi=60, phi_min=0, phi_break=3, verbose=False):
     for ω in omega or [100]:
         for φ in PHI:
             for ψ in PSI:
-                result = _Φ(k=ω/MASS_MEV, φ=φ, ψ=ψ, verbose=False)
+                result = _Φ(k=ω/MASS_MEV, φ=φ, ψ=ψ, verbose=verbose)
                 σ, ε = result[0]/MASS_MEV**3, result[1]/MASS_MEV**3
                 if verbose:
                     print(f"{ω=:>3d}   {φ=:<4.2f}   {ψ=:<4.2f}   {σ=:<9.6g} +- {ε:<8.6e}")
                 yield ω, φ, ψ, σ, ε
 
 def main(omega=None, nphi=60, phi_min=0, phi_break=3, verbose=False):
-    with open("pairpolarization.csv", 'w', newline='') as csvfile:
+    with open("ppv.csv", 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow('ω φ ψ σ ε'.split(' '))
         for ω, φ, ψ, σ, ε in _main(omega, nphi, phi_min, phi_break, verbose):
@@ -115,4 +128,5 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--nphi", type=int, default=60, help="Number of values of phi (φ) in the range from phi-min to pi")
     parser.add_argument("-p", "--phi-min", type=float, default=0, help="Minimum value of phi (φ) in the range")
     parser.add_argument("-b", "--phi-break", type=float, default=3, help="Break in the range of values of phi (φ). Will calculate N/2 points in [phi-min, phi-break] and N/2 in [phi-break, pi]")
+    parser.add_argument("-v", "--verbose", action="store_true", default=False)
     main(**vars(parser.parse_args()))
