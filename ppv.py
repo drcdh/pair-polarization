@@ -100,10 +100,8 @@ def _Φ(k, φ, ψ,
               '   Q = %.2g' % (mu, sig, Q))
     return mu, sig
 
-def _main(omega=None, nphi=60, phi_min=0, phi_break=3, verbose=False):
-    PHI = [phi_break * i / (nphi//2) for i in range(nphi//2)]
-    PHI += [(pi - phi_break) * i / (nphi//2) + phi_break for i in range(nphi//2)]
-    PHI += [pi]
+def _main(omega=None, nphi=60, phi_min=0, phi_max=pi, verbose=False):
+    PHI = [phi_min + (phi_max - phi_min) * i / nphi for i in range(nphi+1)]
     PSI = [0, pi/2]
     for ω in omega or [100]:
         for φ in PHI:
@@ -114,19 +112,19 @@ def _main(omega=None, nphi=60, phi_min=0, phi_break=3, verbose=False):
                     print(f"{ω=:>3d}   {φ=:<4.2f}   {ψ=:<4.2f}   {σ=:<9.6g} +- {ε:<8.6e}")
                 yield ω, φ, ψ, σ, ε
 
-def main(omega=None, nphi=60, phi_min=0, phi_break=3, verbose=False):
+def main(omega=None, nphi=60, phi_min=0, phi_max=pi, verbose=False):
     with open("ppv.csv", 'w', newline='', encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow('ω φ ψ σ ε'.split(' '))
-        for ω, φ, ψ, σ, ε in _main(omega, nphi, phi_min, phi_break, verbose):
+        for ω, φ, ψ, σ, ε in _main(omega, nphi, phi_min, phi_max, verbose):
             writer.writerow(['%g' % _v for _v in [ω, φ, ψ, σ, ε]])
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Calculate the cross-section for electron/positron pair-production by polarized photons.")
     parser.add_argument("-o", "--omega", type=float, action="append", help="Incoming photon energy(s) in units of MeV. Can be repeated. If not given, 100 MeV will be used")
-    parser.add_argument("-n", "--nphi", type=int, default=60, help="Number of values of phi (φ) in the range from phi-min to pi")
-    parser.add_argument("-p", "--phi-min", type=float, default=0, help="Minimum value of phi (φ) in the range")
-    parser.add_argument("-b", "--phi-break", type=float, default=3, help="Break in the range of values of phi (φ). Will calculate N/2 points in [phi-min, phi-break] and N/2 in [phi-break, pi]")
+    parser.add_argument("-n", "--nphi", type=int, default=60, help="Number of values of phi (φ) in the range from phi-min to phi-max, semi-inclusive")
+    parser.add_argument("-a", "--phi-min", type=float, default=0, help="Minimum value of phi (φ) in the range. Default value is 0")
+    parser.add_argument("-b", "--phi-max", type=float, default=pi, help="Minimum value of phi (φ) in the range. Default value is pi")
     parser.add_argument("-v", "--verbose", action="store_true", default=False)
     main(**vars(parser.parse_args()))
