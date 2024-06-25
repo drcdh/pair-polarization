@@ -1,12 +1,12 @@
 aiohttp-cors==0.7.0
 async-timeout==3.0.1
 brotlipy==0.7.0
-certifi==2021.10.8
+certifi==2023.7.22
 cycler==0.10.0
 Cython==0.29.17
 jedi==0.17.0
 numpy==1.18.1
-Pillow==6.2.1
+Pillow==10.0.1
 pycosat==0.6.3
 pyparsing==2.4.7
 pytest==6.2.2
