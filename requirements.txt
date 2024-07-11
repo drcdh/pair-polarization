@@ -5,8 +5,9 @@ certifi==2023.7.22
 cycler==0.10.0
 Cython==0.29.17
 jedi==0.17.0
-numpy==1.18.1
-Pillow==10.0.1
+numpy==1.21
+Pillow==10.2.0
+pillow==10.3.0
 pycosat==0.6.3
 pyparsing==2.4.7
 pytest==6.2.2
